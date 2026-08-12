@@ -105,6 +105,13 @@ uint16_t Display::TotalGhostDebt() const {
 void Display::PushRegion(const Rect& area, m5epd_update_mode_t mode) {
     if (area.IsEmpty()) return;
 
+    // Wait for any in-flight update BEFORE touching controller memory. The
+    // gram writes below have no interlock of their own, and UpdateArea's
+    // internal CheckAFSR() comes too late -- by then the frame buffer the
+    // IT8951 is actively driving has already been overwritten, which strands
+    // the panel mid-waveform showing the refresh flash (issue #105).
+    WaitIdle();
+
     // Whole panel: the canvas can push itself, which is both simpler and what
     // the driver is optimised for.
     if (area.w >= kDisplayW && area.h >= kDisplayH) {
@@ -197,6 +204,9 @@ void Display::FlushTextRegion(const Rect& r) {
 
 void Display::RefreshFull() {
     if (!_begun) return;
+    // pushCanvas() writes full gram with no interlock either, so it needs the
+    // same guard PushRegion() has (issue #105).
+    WaitIdle();
     _canvas.pushCanvas(0, 0, UPDATE_MODE_GC16);
     ClearDebt(Rect::FullScreen());
     _dirty = Rect{};
