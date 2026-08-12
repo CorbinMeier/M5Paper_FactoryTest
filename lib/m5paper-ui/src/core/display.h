@@ -84,12 +84,16 @@ class Display {
    private:
     // Pushes one sub-rectangle of the shadow canvas to the panel.
     //
-    // UNVERIFIED against the installed M5EPD library (gated on issue #1).
-    // M5EPD_Canvas::pushCanvas() only takes an origin, so a partial push has to
-    // go through the driver's WritePartGram4bpp + UpdateArea pair. If the real
-    // header disagrees, this is the one function to fix -- every other flush
-    // path routes through it.
+    // M5EPD_Canvas::pushCanvas() only takes an origin, so a partial push goes
+    // through the driver's WritePartGram4bpp + UpdateArea pair. That driver
+    // call takes no stride and consumes w*h/2 *packed* bytes, so the region
+    // must be copied out of the full-width canvas first (issue #106).
     void PushRegion(const Rect& area, m5epd_update_mode_t mode);
+
+    // Contiguous staging buffer for the copy above. PSRAM, grown on demand,
+    // never shrunk -- the worst case is one full screen at 259 KB, and repeated
+    // grow/free churn would fragment the pool it lives in.
+    uint8_t* PackRegion(const uint8_t* base, const Rect& area, uint32_t stride);
 
     m5epd_update_mode_t ChoosePolicy(const Rect& area, DrawIntent intent);
     void AddDebt(const Rect& area, uint8_t amount);
@@ -102,6 +106,8 @@ class Display {
     uint32_t _flush_count = 0;
     uint32_t _full_refresh_count = 0;
     bool _begun = false;
+    uint8_t* _pack = nullptr;
+    uint32_t _pack_capacity = 0;
 };
 
 }  // namespace m5ui

@@ -1,5 +1,8 @@
 #include "display.h"
 
+#include <esp_heap_caps.h>
+#include <string.h>
+
 #include "tokens.h"
 
 namespace m5ui {
@@ -129,10 +132,44 @@ void Display::PushRegion(const Rect& area, m5epd_update_mode_t mode) {
     }
 
     const uint32_t stride = (uint32_t)kDisplayW / 2;
-    uint8_t* origin = base + (uint32_t)area.y * stride + (uint32_t)area.x / 2;
 
-    M5.EPD.WritePartGram4bpp(area.x, area.y, area.w, area.h, origin);
+    // WritePartGram4bpp takes no stride: it reads w*h/2 contiguous bytes as a
+    // standalone sub-image. Handing it a pointer into the full-width canvas
+    // makes it walk across canvas rows instead of region rows (issue #106), so
+    // the region has to be copied out packed first.
+    const uint8_t* packed = PackRegion(base, area, stride);
+    if (packed == nullptr) {
+        // Out of PSRAM. A whole-canvas push is slower but correct, and losing
+        // the frame outright would be worse.
+        _canvas.pushCanvas(0, 0, mode);
+        return;
+    }
+
+    M5.EPD.WritePartGram4bpp(area.x, area.y, area.w, area.h, packed);
     M5.EPD.UpdateArea(area.x, area.y, area.w, area.h, mode);
+}
+
+uint8_t* Display::PackRegion(const uint8_t* base, const Rect& area,
+                             uint32_t stride) {
+    // 4bpp: two pixels per byte. Flush() aligns x and width to 4, so these
+    // divisions are exact and rows stay byte-aligned.
+    const uint32_t row_bytes = (uint32_t)area.w / 2;
+    const uint32_t needed = row_bytes * (uint32_t)area.h;
+
+    if (needed > _pack_capacity) {
+        uint8_t* grown =
+            (uint8_t*)heap_caps_realloc(_pack, needed, MALLOC_CAP_SPIRAM);
+        if (grown == nullptr) return nullptr;
+        _pack = grown;
+        _pack_capacity = needed;
+    }
+
+    const uint8_t* src = base + (uint32_t)area.y * stride + (uint32_t)area.x / 2;
+    for (int16_t row = 0; row < area.h; ++row) {
+        memcpy(_pack + (uint32_t)row * row_bytes, src, row_bytes);
+        src += stride;
+    }
+    return _pack;
 }
 
 // ------------------------------------------------------------ policy -------
