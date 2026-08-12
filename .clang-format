@@ -1,0 +1,31 @@
+# Issue #3. Matches the formatting already applied across src/ by the previous
+# C Formatter pass, so a reformat does not churn the legacy tree.
+---
+Language: Cpp
+BasedOnStyle: Google
+
+AccessModifierOffset: -3
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: true
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: WithoutElse
+ColumnLimit: 80
+DerivePointerAlignment: false
+IndentWidth: 4
+PointerAlignment: Left
+SortIncludes: CaseSensitive
+SpaceAfterCStyleCast: false
+Standard: c++17
+TabWidth: 4
+UseTab: Never
+
+IncludeCategories:
+  - Regex: '^<M5EPD\.h>'
+    Priority: 1
+  - Regex: '^<.*\.h>'
+    Priority: 2
+  - Regex: '^<.*>'
+    Priority: 3
+  - Regex: '.*'
+    Priority: 4
