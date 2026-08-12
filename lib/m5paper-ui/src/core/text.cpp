@@ -57,7 +57,9 @@ bool TextEngine::Begin() {
 }
 
 bool TextEngine::LoadFont(const char* path) {
-    if (M5.EPD.isEPDReady() == false) return false;
+    // No panel-readiness guard here: M5EPD_Driver exposes nothing that answers
+    // "is the panel initialised", and this function performs no I/O to guard
+    // (issue #97).
     _ready = true;
     (void)path; // loadFont() is applied per-canvas at draw time
     return true;

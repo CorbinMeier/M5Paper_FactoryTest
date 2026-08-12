@@ -10,6 +10,7 @@
 // matter: the internal heap fragments under repeated subsystem init/deinit, so
 // total-free can read 80 KB while no single 20 KB allocation will succeed.
 
+#include <Print.h>
 #include <stdint.h>
 
 namespace m5ui {
@@ -70,7 +71,9 @@ class MemoryMonitor {
     uint32_t HistoryAt(uint8_t index) const;
 
     // Human-readable multi-line dump for the serial log and the info screen.
-    void DumpTo(class Print& out) const;
+    // Must be the global Arduino Print, not an elaborated `class Print`, which
+    // inside this namespace would declare a phantom m5ui::Print (issue #96).
+    void DumpTo(Print& out) const;
 
    private:
     uint32_t _history[kHistoryLen] = {0}; // free internal DRAM, KB
