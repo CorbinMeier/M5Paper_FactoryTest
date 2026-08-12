@@ -74,10 +74,12 @@ void SetTimeSynced(uint8_t val) {
 }
 
 void SetLanguage(uint8_t language) {
-    if (language >= LANGUAGE_EN && language <= LANGUAGE_ZH) {
+    // No lower-bound check: LANGUAGE_EN is 0 and language is unsigned, so
+    // `language >= LANGUAGE_EN` is tautological.
+    if (language <= LANGUAGE_ZH) {
         global_language = language;
+        SaveSetting();
     }
-    SaveSetting();
 }
 
 uint8_t GetLanguage(void) {
