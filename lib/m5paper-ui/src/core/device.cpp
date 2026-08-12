@@ -112,6 +112,9 @@ bool Device::Begin(const DeviceConfig& config) {
     SetScratchCanvas(_scratch);
     Text().Begin();
 
+    // Set the cache lifetime before Begin(), so the boot sample it takes is
+    // governed by the configured period rather than the default.
+    _power.SetCacheRefresh(_config.battery_cache_refresh_ms);
     _power.Begin();
 
     if (_config.touch) _touch.Begin();

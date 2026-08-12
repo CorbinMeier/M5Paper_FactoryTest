@@ -56,6 +56,11 @@ struct DeviceConfig {
     uint32_t idle_shutdown_ms = 6 * 60 * 1000;
     bool auto_power_save = true;
 
+    // How long a battery reading stays cached. 0 samples the ADC on every
+    // GetBattery() call. Applied at Begin(); change it later with
+    // Power().SetCacheRefresh().
+    uint32_t battery_cache_refresh_ms = PowerManager::kDefaultCacheRefreshMs;
+
     // Clean the panel after this many partial flushes even when the debt
     // ledger has not tripped. 0 disables.
     uint32_t periodic_refresh_flushes = 200;
@@ -133,6 +138,11 @@ class Device {
     // Everything about this hardware, probed at Begin().
     const DeviceSpecs& Specs() const {
         return _specs;
+    }
+    // The configuration Begin() was called with -- so a screen that overrides
+    // a policy can restore the app's setting rather than a library default.
+    const DeviceConfig& Config() const {
+        return _config;
     }
     // Re-probes the mutable parts (SD presence, CPU frequency).
     void RefreshSpecs();

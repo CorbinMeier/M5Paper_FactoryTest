@@ -60,11 +60,20 @@ BatteryState PowerManager::SampleNow() {
     return s;
 }
 
+void PowerManager::SetCacheRefresh(uint32_t milliseconds) {
+    _cache_refresh_ms = milliseconds;
+}
+
 BatteryState PowerManager::GetBattery() {
+    // Begin() takes the boot reading, so the first caller after it gets a real
+    // value rather than a zeroed struct. Calling it here as well covers an app
+    // that reaches for the battery before Device::Begin().
     if (!_begun) Begin();
 
+    if (_cache_refresh_ms == 0) return SampleNow();
+
     const uint32_t now = millis();
-    const bool stale = (now - _cached.sampled_at_ms) >= kSamplePeriodMs;
+    const bool stale = (now - _cached.sampled_at_ms) >= _cache_refresh_ms;
     if (stale || _cached.sampled_at_ms == 0) return SampleNow();
     return _cached;
 }

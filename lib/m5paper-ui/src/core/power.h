@@ -34,14 +34,31 @@ struct BatteryState {
 };
 
 // Owns ADC sampling and its cadence. Reads are cheap because they are served
-// from a smoothed cache; the ADC itself is only hit every kSamplePeriodMs.
+// from a smoothed cache; the ADC itself is only hit once per refresh period.
 class PowerManager {
    public:
-    static constexpr uint32_t kSamplePeriodMs = 5000;
+    // A minute. A cell's charge moves slowly enough that a status bar reading
+    // this often cannot tell the difference, and the ADC read is the one part
+    // of GetBattery() that actually costs something.
+    static constexpr uint32_t kDefaultCacheRefreshMs = 60000;
     static constexpr uint8_t kSmoothingWindow = 8;
 
-    // Enables the battery ADC. Safe to call once, from Device::Begin().
+    // Enables the battery ADC and takes the first reading, so GetBattery() is
+    // answerable from the moment Device::Begin() returns rather than after the
+    // first refresh period elapses. Safe to call twice.
     void Begin();
+
+    // How long a cached reading stays valid, in milliseconds. 0 disables the
+    // cache entirely, sampling on every GetBattery() call.
+    //
+    // Note the interaction with the smoothing window: the average spans
+    // kSmoothingWindow refresh periods, so at the 60 s default a reading
+    // reflects the last 8 minutes. That is the intent for a battery -- shorten
+    // this if you need the gauge to track a load step quickly.
+    void SetCacheRefresh(uint32_t milliseconds);
+    uint32_t CacheRefresh() const {
+        return _cache_refresh_ms;
+    }
 
     // THE call most app code wants. Returns the cached state, resampling first
     // if the cache is stale.
@@ -69,6 +86,7 @@ class PowerManager {
     void PushSample(uint32_t mv);
 
     bool _begun = false;
+    uint32_t _cache_refresh_ms = kDefaultCacheRefreshMs;
     uint32_t _samples[kSmoothingWindow] = {0};
     uint8_t _sample_count = 0;
     uint8_t _sample_head = 0;

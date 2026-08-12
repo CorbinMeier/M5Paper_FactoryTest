@@ -59,8 +59,17 @@ curve, so it is unit-testable off-device — the stock firmware inlined a linear
 3300–4350 mV map inside a status-bar draw call, which reports ~50% for most of
 the usable life and then falls off a cliff.
 
-Readings are smoothed over an 8-sample window and cached for 5 s, so a status
-bar can call it every frame.
+Readings are smoothed over an 8-sample window and cached, so a status bar can
+call it every frame. The boot reading is taken inside `Begin()`, so the value is
+real from the moment the device is up rather than after the first refresh
+period elapses. Cache lifetime defaults to 60 s and is settable at runtime:
+
+```cpp
+dev.Power().SetCacheRefresh(5000);  // 5 s, to watch a load step
+dev.Power().SetCacheRefresh(0);     // no cache; sample on every call
+```
+
+or at boot via `DeviceConfig::battery_cache_refresh_ms`.
 
 ## Two memory pools, never summed
 

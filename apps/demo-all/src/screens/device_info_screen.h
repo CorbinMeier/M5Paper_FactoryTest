@@ -11,6 +11,10 @@ class DeviceInfoScreen : public DemoScreen {
     DeviceInfoScreen();
 
     void Tick() override;
+    // Tighten the battery sampling period while this screen is open, and put
+    // the app's configured period back on the way out.
+    void OnEnter() override;
+    void OnExit() override;
 
    protected:
     void BuildContent(m5ui::Column& column) override;

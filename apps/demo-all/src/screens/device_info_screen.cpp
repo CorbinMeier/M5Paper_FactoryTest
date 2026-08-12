@@ -31,11 +31,25 @@ DeviceInfoScreen::DeviceInfoScreen() : DemoScreen("device-info", "Device") {}
 void DeviceInfoScreen::BuildActions(AppBar& bar) {
     bar.AddAction("Refresh", [this]() {
         Device::Get().RefreshSpecs();
+        // Bypass the cache -- a manual refresh should read the ADC, not hand
+        // back whatever the last period sampled.
+        Device::Get().Power().SampleNow();
         _last_live_refresh_ms = 0;
         RefreshLiveValues();
         // A spec refresh is a good moment to clear accumulated residue.
         Device::Get().Panel().RefreshFull();
     });
+}
+
+void DeviceInfoScreen::OnEnter() {
+    // This screen exists to watch the battery, so it is worth paying for a
+    // tighter sampling period while it is open. Restored on the way out.
+    Device::Get().Power().SetCacheRefresh(kLiveRefreshMs);
+}
+
+void DeviceInfoScreen::OnExit() {
+    Device::Get().Power().SetCacheRefresh(
+        Device::Get().Config().battery_cache_refresh_ms);
 }
 
 void DeviceInfoScreen::BuildContent(Column& column) {
