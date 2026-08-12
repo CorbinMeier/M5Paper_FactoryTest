@@ -22,17 +22,34 @@ platformio.ini        one [env:] per app over a shared [env] base
 
 ## Build
 
-**There is no toolchain installed** (issue #1, `ai-blocked` — needs a system
-install, which requires human approval). Nothing in this repo has been
-compiled. Treat every implementation as unverified.
-
-Once PlatformIO exists:
+PlatformIO Core lives in `~/.platformio/penv` and is **not** on PATH by default
+— see the README for setup. The project builds as of 2026-08-12 (issue #1).
 
 ```
 pio run -e demo-all          # build
 pio run -e demo-all -t upload
-pio test -e native           # host-side tests (issue #17)
+pio test -e native           # host-side tests (issue #17), 21/21 passing
 ```
+
+Caveats that still bite:
+
+- **Compiles ≠ works.** Nothing has run on real hardware. The compiler has
+  checked the implementations; the panel has not.
+- **No lint stage.** clang-format/clang-tidy/cppcheck are still absent (issue
+  #100), so changes are verified by test + build only. `.clang-format` exists
+  but nothing enforces it.
+- **Flashing needs `dialout` + udev rules** (issue #93), separate from the
+  build toolchain.
+- The shared config block is `[esp32_base]`, deliberately not `[env]`: a
+  section named `[env]` is the implicit base for *every* environment, and it
+  leaked `board = m5stack-fire` into `[env:native]` (issue #98). New app envs
+  need `extends = esp32_base`.
+- **The library and M5EPD share a global namespace.** M5EPD.h declares a global
+  `Button`, which is ambiguous against `m5ui::Button` in any TU that opens with
+  `using namespace m5ui;` — qualify as `m5ui::Button` (issue #95). Watch for
+  the same collision on other names. Relatedly, never write `class Foo&` as a
+  parameter type inside `namespace m5ui` for a global Arduino type: that
+  declares a phantom `m5ui::Foo` rather than naming `::Foo` (issue #96).
 
 ## Non-obvious facts
 
