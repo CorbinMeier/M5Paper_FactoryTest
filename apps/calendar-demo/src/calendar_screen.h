@@ -1,0 +1,22 @@
+#pragma once
+// The only screen in calendar-demo: current month grid plus the clock.
+// White page, black text throughout -- today's cell gets an outline rather
+// than an inverted fill, so nothing on the panel is ever black-on-black or
+// relies on a grey fill to read (issue #110).
+
+#include <m5paper_ui.h>
+
+namespace calendar {
+
+class CalendarScreen : public m5ui::Screen {
+   public:
+    CalendarScreen();
+
+    void Build() override;
+
+   private:
+    void BuildMonthGrid(m5ui::Column& column, int16_t year, uint8_t month,
+                        uint8_t today_day);
+};
+
+}  // namespace calendar

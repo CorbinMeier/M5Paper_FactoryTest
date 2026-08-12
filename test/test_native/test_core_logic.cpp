@@ -1,12 +1,13 @@
 // Host-side tests for the hardware-independent logic (issue #17).
 //
 // Only code that compiles without Arduino or M5EPD can live here -- currently
-// the battery discharge curve and the rect algebra. As more logic is split out
-// of the hardware-touching translation units, add it.
+// the battery discharge curve, the rect algebra, and the calendar math. As
+// more logic is split out of the hardware-touching translation units, add it.
 
 #include <unity.h>
 
 #include "../../lib/m5paper-ui/src/core/battery_curve.h"
+#include "../../lib/m5paper-ui/src/core/calendar_math.h"
 #include "../../lib/m5paper-ui/src/core/geometry.h"
 
 using namespace m5ui;
@@ -158,6 +159,45 @@ void test_framebuffer_size_matches_geometry(void) {
     TEST_ASSERT_EQUAL_UINT32(259200, kFramebufferBytes);
 }
 
+// -------------------------------------------------------------- calendar ----
+
+void test_leap_year_divisible_by_four(void) {
+    TEST_ASSERT_TRUE(IsLeapYear(2024));
+    TEST_ASSERT_TRUE(IsLeapYear(2000));
+    TEST_ASSERT_FALSE(IsLeapYear(1900));
+    TEST_ASSERT_FALSE(IsLeapYear(2026));
+}
+
+void test_days_in_month_handles_february(void) {
+    TEST_ASSERT_EQUAL_UINT8(29, DaysInMonth(2024, 2));
+    TEST_ASSERT_EQUAL_UINT8(28, DaysInMonth(2026, 2));
+    TEST_ASSERT_EQUAL_UINT8(28, DaysInMonth(1900, 2));
+}
+
+void test_days_in_month_matches_calendar(void) {
+    TEST_ASSERT_EQUAL_UINT8(31, DaysInMonth(2026, 1));
+    TEST_ASSERT_EQUAL_UINT8(30, DaysInMonth(2026, 4));
+    TEST_ASSERT_EQUAL_UINT8(31, DaysInMonth(2026, 12));
+}
+
+// Reference weekdays cross-checked against `date -d <date> +%A`.
+void test_day_of_week_known_dates(void) {
+    TEST_ASSERT_EQUAL_UINT8(3, DayOfWeek(2026, 8, 12));  // Wednesday
+    TEST_ASSERT_EQUAL_UINT8(6, DayOfWeek(2000, 1, 1));   // Saturday
+    TEST_ASSERT_EQUAL_UINT8(4, DayOfWeek(2026, 1, 1));   // Thursday
+    TEST_ASSERT_EQUAL_UINT8(6, DayOfWeek(2026, 2, 28));  // Saturday
+    TEST_ASSERT_EQUAL_UINT8(1, DayOfWeek(1900, 1, 1));   // Monday
+}
+
+void test_day_of_week_advances_by_one_each_day(void) {
+    uint8_t previous = DayOfWeek(2026, 8, 1);
+    for (uint8_t day = 2; day <= 31; ++day) {
+        const uint8_t w = DayOfWeek(2026, 8, day);
+        TEST_ASSERT_EQUAL_UINT8((previous + 1) % 7, w);
+        previous = w;
+    }
+}
+
 int main(int, char**) {
     UNITY_BEGIN();
 
@@ -184,6 +224,12 @@ int main(int, char**) {
     RUN_TEST(test_rect_aligned_out_snaps_outward);
     RUN_TEST(test_rect_clipped_to_panel);
     RUN_TEST(test_framebuffer_size_matches_geometry);
+
+    RUN_TEST(test_leap_year_divisible_by_four);
+    RUN_TEST(test_days_in_month_handles_february);
+    RUN_TEST(test_days_in_month_matches_calendar);
+    RUN_TEST(test_day_of_week_known_dates);
+    RUN_TEST(test_day_of_week_advances_by_one_each_day);
 
     return UNITY_END();
 }

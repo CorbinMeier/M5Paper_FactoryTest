@@ -20,6 +20,7 @@
 
 // -------------------------------------------------------------- core -------
 #include "core/app.h"
+#include "core/calendar_math.h"
 #include "core/device.h"
 #include "core/display.h"
 #include "core/focus.h"
