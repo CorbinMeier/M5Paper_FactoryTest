@@ -48,8 +48,10 @@ void Frame_Base::CheckAutoPowerSave() {
                TIME_BEFORE_SHUTDOWN_PROMPT_MS) {
         if (!_shutdown_prompt_is_shown) {
             log_d("Show shutdown prompt");
-            _canvas_footer = new M5EPD_Canvas(&M5.EPD);
-            _canvas_footer->createCanvas(540, footer_height);
+            if (_canvas_footer == NULL) {
+                _canvas_footer = new M5EPD_Canvas(&M5.EPD);
+                _canvas_footer->createCanvas(540, footer_height);
+            }
             _canvas_footer->setTextSize(26);
             _canvas_footer->setTextDatum(CC_DATUM);
             char buf[128];
