@@ -2,6 +2,7 @@
 
 #include <M5EPD.h>
 
+#include "i2c_lock.h"
 #include "tokens.h"
 
 namespace m5ui {
@@ -42,6 +43,7 @@ InputEvent InputEvent::MakeTap(int16_t x, int16_t y) {
 // ---------------------------------------------------------- InputQueue ----
 
 bool InputQueue::Push(const InputEvent& e) {
+    portENTER_CRITICAL(&_mux);
     if (_count == kCapacity) {
         // Drop the oldest rather than the newest: a stale pointer position is
         // worth less than the current one.
@@ -52,43 +54,58 @@ bool InputQueue::Push(const InputEvent& e) {
     _buf[_tail] = e;
     _tail = (uint8_t)((_tail + 1) % kCapacity);
     _count++;
+    portEXIT_CRITICAL(&_mux);
     return true;
 }
 
 bool InputQueue::Pop(InputEvent& out) {
-    if (_count == 0) return false;
+    portENTER_CRITICAL(&_mux);
+    if (_count == 0) {
+        portEXIT_CRITICAL(&_mux);
+        return false;
+    }
     out = _buf[_head];
     _head = (uint8_t)((_head + 1) % kCapacity);
     _count--;
+    portEXIT_CRITICAL(&_mux);
     return true;
 }
 
 void InputQueue::Clear() {
+    portENTER_CRITICAL(&_mux);
     _head = _tail = _count = 0;
+    portEXIT_CRITICAL(&_mux);
 }
 
 // --------------------------------------------------------- TouchSource ----
 
 void TouchSource::Begin() {
+    I2CLock lock;
     M5.TP.SetRotation(90);
 }
 
 void TouchSource::Poll(InputQueue& queue) {
-    M5.TP.update();
-    const uint32_t now = millis();
-
-    const bool finger = !M5.TP.isFingerUp();
-    if (!finger && !_down) {
-        return; // idle -- the common case, costs one I2C read
-    }
-
+    // Runs on the input task while the UI task may be reading the RTC on the
+    // same bus (issue #107). Scoped so the lock is released before the gesture
+    // work below, which touches no hardware.
+    bool finger = false;
     int16_t x = _last_x;
     int16_t y = _last_y;
-    if (finger) {
-        tp_finger_t f = M5.TP.readFinger(0);
-        x = (int16_t)f.x;
-        y = (int16_t)f.y;
+    {
+        I2CLock lock;
+        M5.TP.update();
+        finger = !M5.TP.isFingerUp();
+        if (!finger && !_down) {
+            return; // idle -- the common case, costs one I2C read
+        }
+        if (finger) {
+            tp_finger_t f = M5.TP.readFinger(0);
+            x = (int16_t)f.x;
+            y = (int16_t)f.y;
+        }
     }
+
+    const uint32_t now = millis();
 
     InputEvent e;
     e.src = InputSource::Touch;

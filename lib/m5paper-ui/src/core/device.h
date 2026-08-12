@@ -151,12 +151,25 @@ class Device {
     }
 
     // ------------------------------------------------------------ app loop --
-    // Attaches an app and runs forever: drain input, tick, paint, flush,
-    // idle-check. Call from setup(); it does not return.
+    // Attaches an app, spawns the input task, and runs the UI loop forever.
+    // Call from setup(); it does not return.
+    //
+    // Two tasks, because a panel update blocks for 450ms under GC16 and input
+    // sampled only between updates is input mostly missed (issue #107):
+    //
+    //   input task  core 0, high priority -- polls the GT911 at kInputPollHz
+    //                                        and pushes to the queue
+    //   UI (this)   core 1, normal        -- owns the widget tree: drain,
+    //                                        tick, paint, flush
+    //
+    // The widget tree is owned exclusively by the UI task, so only InputQueue
+    // crosses the boundary and only it needs guarding. Touch is on I2C and the
+    // panel on SPI, so the two tasks do not contend for a bus.
     [[noreturn]] void Run(App& app);
 
-    // One iteration, for callers driving the loop themselves (tests, or an
+    // One UI iteration, for callers driving the loop themselves (tests, or an
     // app with its own outer loop). Returns true when the panel was touched.
+    // Does NOT poll hardware -- it drains whatever the input task has queued.
     bool Step();
 
     App* CurrentApp() const {
@@ -192,9 +205,21 @@ class Device {
     Device(const Device&) = delete;
     Device& operator=(const Device&) = delete;
 
+    // Polls the hardware sources into the queue. Runs on the input task.
+    void PollSources();
+    // Drains the queue into the widget tree. Runs on the UI task.
     void PumpInput();
     void CheckIdle();
     void CheckPeriodicRefresh();
+
+    // FreeRTOS entry point; forwards to PollSources() forever.
+    static void InputTaskEntry(void* self);
+
+    // 50 Hz. Fast enough that a deliberate tap cannot fall between samples,
+    // slow enough to leave the core mostly idle. The GT911 itself reports at
+    // roughly 100 Hz, so this halves its rate rather than chasing it.
+    static constexpr uint32_t kInputPollHz = 50;
+    static constexpr uint32_t kInputStackBytes = 4096;
 
     DeviceConfig _config;
     DeviceSpecs _specs;

@@ -3,13 +3,18 @@
 #include <esp_task_wdt.h>
 #include <time.h>
 
+#include "i2c_lock.h"
+
 namespace m5ui {
 
 // ---------------------------------------------------------------- Clock ----
 
 void Clock::Begin() {
     rtc_time_t t;
-    M5.RTC.getTime(&t);
+    {
+        I2CLock lock;
+        M5.RTC.getTime(&t);
+    }
     // The RTC keeps running on coin-cell backup, so a plausible time here means
     // it was set at some point -- treat that as synced until NTP says otherwise.
     _synced = !(t.hour == 0 && t.min == 0 && t.sec == 0);
@@ -17,7 +22,10 @@ void Clock::Begin() {
 
 String Clock::TimeString(bool with_seconds) {
     rtc_time_t t;
-    M5.RTC.getTime(&t);
+    {
+        I2CLock lock;
+        M5.RTC.getTime(&t);
+    }
 
     char buf[12];
     if (with_seconds) {
@@ -30,7 +38,10 @@ String Clock::TimeString(bool with_seconds) {
 
 String Clock::DateString() {
     rtc_date_t d;
-    M5.RTC.getDate(&d);
+    {
+        I2CLock lock;
+        M5.RTC.getDate(&d);
+    }
 
     char buf[16];
     snprintf(buf, sizeof(buf), "%04d-%02d-%02d", d.year, d.mon, d.day);
@@ -40,8 +51,11 @@ String Clock::DateString() {
 uint32_t Clock::EpochSeconds() {
     rtc_time_t t;
     rtc_date_t d;
-    M5.RTC.getTime(&t);
-    M5.RTC.getDate(&d);
+    {
+        I2CLock lock;
+        M5.RTC.getTime(&t);
+        M5.RTC.getDate(&d);
+    }
 
     struct tm tm_val = {};
     tm_val.tm_year = d.year - 1900;
@@ -70,8 +84,11 @@ bool Clock::SyncFromNtp(const char* server, uint32_t timeout_ms) {
                             (int8_t)info.tm_sec};
             rtc_date_t d = {(int8_t)info.tm_wday, (int8_t)(info.tm_mon + 1),
                             (int8_t)info.tm_mday, (int16_t)(info.tm_year + 1900)};
-            M5.RTC.setTime(&t);
-            M5.RTC.setDate(&d);
+            {
+                I2CLock lock;
+                M5.RTC.setTime(&t);
+                M5.RTC.setDate(&d);
+            }
             _synced = true;
             return true;
         }
@@ -155,10 +172,27 @@ void Device::SetApp(App* app) {
 
 // ----------------------------------------------------------- input pump ----
 
-void Device::PumpInput() {
+void Device::PollSources() {
     if (_config.touch) _touch.Poll(_queue);
     if (_config.side_buttons) _buttons.Poll(_queue);
+}
 
+void Device::InputTaskEntry(void* self) {
+    Device* device = static_cast<Device*>(self);
+    esp_task_wdt_add(nullptr);
+
+    const TickType_t period = pdMS_TO_TICKS(1000 / kInputPollHz);
+    TickType_t last_wake = xTaskGetTickCount();
+    for (;;) {
+        device->PollSources();
+        esp_task_wdt_reset();
+        // Fixed cadence rather than a trailing delay, so a slow I2C read does
+        // not stretch the sampling interval and let a tap slip through.
+        vTaskDelayUntil(&last_wake, period);
+    }
+}
+
+void Device::PumpInput() {
     InputEvent e;
     while (_queue.Pop(e)) {
         NoteActivity();
@@ -204,6 +238,14 @@ bool Device::Step() {
 void Device::Run(App& app) {
     if (!_begun) Begin();
     SetApp(&app);
+
+    // Input on core 0, pinned: a panel update blocks this loop for hundreds of
+    // milliseconds, and touch sampled only between updates is touch mostly
+    // missed (issue #107). Priority above the UI task so a refresh in progress
+    // never delays a sample.
+    xTaskCreatePinnedToCore(&Device::InputTaskEntry, "m5ui_input",
+                            kInputStackBytes, this,
+                            tskIDLE_PRIORITY + 3, nullptr, 0);
 
     for (;;) {
         const bool painted = Step();

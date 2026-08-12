@@ -6,6 +6,7 @@
 // through the focus manager. No widget and no screen reads M5.TP or M5.Btn*
 // directly.
 
+#include <freertos/FreeRTOS.h>
 #include <stdint.h>
 
 #include <functional>
@@ -119,6 +120,14 @@ class InputQueue {
     }
 
    private:
+    // The producer runs on the input task and the consumer on the UI task
+    // (issue #107), so every mutation is guarded. A lock-free SPSC ring is not
+    // available here: drop-oldest advances _head, which is the consumer's
+    // index, and _count is written from both sides. The critical sections are
+    // a handful of instructions, so contention is not a concern.
+    //
+    // Task context only -- Push() from an ISR would need the _ISR variants.
+    mutable portMUX_TYPE _mux = portMUX_INITIALIZER_UNLOCKED;
     InputEvent _buf[kCapacity];
     uint8_t _head = 0;
     uint8_t _tail = 0;
