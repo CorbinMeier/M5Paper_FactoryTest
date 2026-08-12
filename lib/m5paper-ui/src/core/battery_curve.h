@@ -18,4 +18,15 @@ constexpr uint8_t kCriticalPercent = 5;
 // hours and then collapse. Clamps outside [empty, full].
 uint8_t BatteryPercentFromMillivolts(uint32_t mv);
 
+// Pure. Median of a burst of ADC samples, in place (`samples` ends up sorted).
+//
+// Median rather than mean: the ESP32 SAR ADC occasionally returns a single
+// wildly wrong conversion, and one such outlier drags a mean of 8 far enough
+// to move the percent reading by several points. A median discards it for
+// free. An even `count` averages the two middle samples. `count` 0 returns 0.
+//
+// This is what lets a reading be self-contained -- the noise is rejected
+// within one call, so nothing has to be remembered between calls.
+uint32_t MedianMillivolts(uint32_t* samples, uint8_t count);
+
 }  // namespace m5ui

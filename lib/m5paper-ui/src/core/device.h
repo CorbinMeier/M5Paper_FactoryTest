@@ -56,11 +56,6 @@ struct DeviceConfig {
     uint32_t idle_shutdown_ms = 6 * 60 * 1000;
     bool auto_power_save = true;
 
-    // How long a battery reading stays cached. 0 samples the ADC on every
-    // GetBattery() call. Applied at Begin(); change it later with
-    // Power().SetCacheRefresh().
-    uint32_t battery_cache_refresh_ms = PowerManager::kDefaultCacheRefreshMs;
-
     // Clean the panel after this many partial flushes even when the debt
     // ledger has not tripped. 0 disables.
     uint32_t periodic_refresh_flushes = 200;
@@ -148,8 +143,9 @@ class Device {
     void RefreshSpecs();
 
     // ------------------------------------------------------------ battery --
-    // Shortcut for the most-asked question. Same object Power().GetBattery()
-    // returns; here so status bars do not need two hops.
+    // Shortcut for the most-asked question, so status bars do not need two
+    // hops. Pull-only: this reads the ADC when you call it and at no other
+    // time. Nothing in Step() touches the battery.
     BatteryState GetBattery() {
         return _power.GetBattery();
     }

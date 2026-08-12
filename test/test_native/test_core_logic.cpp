@@ -53,6 +53,61 @@ void test_battery_curve_beats_linear_in_the_flat_middle(void) {
     TEST_ASSERT_TRUE(BatteryPercentFromMillivolts(3700) < linear);
 }
 
+// ---------------------------------------------------------- burst median ----
+
+void test_median_of_empty_is_zero(void) {
+    uint32_t none[1] = {0};
+    TEST_ASSERT_EQUAL_UINT32(0, MedianMillivolts(none, 0));
+    TEST_ASSERT_EQUAL_UINT32(0, MedianMillivolts(nullptr, 8));
+}
+
+void test_median_of_one_is_itself(void) {
+    uint32_t one[1] = {3812};
+    TEST_ASSERT_EQUAL_UINT32(3812, MedianMillivolts(one, 1));
+}
+
+void test_median_of_odd_count(void) {
+    uint32_t s[5] = {3800, 3700, 3900, 3750, 3850};
+    TEST_ASSERT_EQUAL_UINT32(3800, MedianMillivolts(s, 5));
+}
+
+void test_median_of_even_count_averages_the_middle(void) {
+    // Sorted: 3700 3750 3800 3900 -> (3750 + 3800 + 1) / 2
+    uint32_t s[4] = {3800, 3700, 3900, 3750};
+    TEST_ASSERT_EQUAL_UINT32(3775, MedianMillivolts(s, 4));
+}
+
+void test_median_rejects_a_wild_outlier(void) {
+    // The case this exists for: one bogus SAR conversion among eight good ones.
+    uint32_t s[8] = {3800, 3805, 3798, 3802, 65535, 3801, 3799, 3803};
+    const uint32_t m = MedianMillivolts(s, 8);
+    TEST_ASSERT_TRUE(m >= 3798 && m <= 3805);
+}
+
+void test_mean_would_not_have_rejected_it(void) {
+    // Same burst through a mean pegs the gauge at 100% -- this is why the
+    // rolling average the cache used to carry was not good enough on its own.
+    const uint32_t s[8] = {3800, 3805, 3798, 3802, 65535, 3801, 3799, 3803};
+    uint32_t sum = 0;
+    for (int i = 0; i < 8; ++i) sum += s[i];
+    TEST_ASSERT_TRUE((sum / 8) > kBatteryFullMv);
+}
+
+void test_median_sorts_in_place(void) {
+    uint32_t s[4] = {3900, 3700, 3800, 3750};
+    MedianMillivolts(s, 4);
+    TEST_ASSERT_EQUAL_UINT32(3700, s[0]);
+    TEST_ASSERT_EQUAL_UINT32(3900, s[3]);
+}
+
+void test_median_feeds_a_stable_percent(void) {
+    // Eight noisy conversions around 3800 mV should land near the 45%
+    // breakpoint rather than anywhere in the band a single conversion allows.
+    uint32_t s[8] = {3792, 3808, 3801, 3797, 3804, 3799, 3802, 3798};
+    const uint8_t pct = BatteryPercentFromMillivolts(MedianMillivolts(s, 8));
+    TEST_ASSERT_UINT8_WITHIN(2, 45, pct);
+}
+
 // ------------------------------------------------------------- geometry ----
 
 void test_rect_union_ignores_empty(void) {
@@ -112,6 +167,15 @@ int main(int, char**) {
     RUN_TEST(test_battery_is_monotonic);
     RUN_TEST(test_battery_interpolates_between_breakpoints);
     RUN_TEST(test_battery_curve_beats_linear_in_the_flat_middle);
+
+    RUN_TEST(test_median_of_empty_is_zero);
+    RUN_TEST(test_median_of_one_is_itself);
+    RUN_TEST(test_median_of_odd_count);
+    RUN_TEST(test_median_of_even_count_averages_the_middle);
+    RUN_TEST(test_median_rejects_a_wild_outlier);
+    RUN_TEST(test_mean_would_not_have_rejected_it);
+    RUN_TEST(test_median_sorts_in_place);
+    RUN_TEST(test_median_feeds_a_stable_percent);
 
     RUN_TEST(test_rect_union_ignores_empty);
     RUN_TEST(test_rect_union_covers_both);

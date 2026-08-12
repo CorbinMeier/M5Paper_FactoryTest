@@ -10,11 +10,9 @@ class DeviceInfoScreen : public DemoScreen {
    public:
     DeviceInfoScreen();
 
+    // Pulls the battery and memory figures on a 5 s cadence -- this screen is
+    // the one place in the demo that asks that often.
     void Tick() override;
-    // Tighten the battery sampling period while this screen is open, and put
-    // the app's configured period back on the way out.
-    void OnEnter() override;
-    void OnExit() override;
 
    protected:
     void BuildContent(m5ui::Column& column) override;

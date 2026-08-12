@@ -59,17 +59,29 @@ curve, so it is unit-testable off-device — the stock firmware inlined a linear
 3300–4350 mV map inside a status-bar draw call, which reports ~50% for most of
 the usable life and then falls off a cliff.
 
-Readings are smoothed over an 8-sample window and cached, so a status bar can
-call it every frame. The boot reading is taken inside `Begin()`, so the value is
-real from the moment the device is up rather than after the first refresh
-period elapses. Cache lifetime defaults to 60 s and is settable at runtime:
+**Pull-only.** Nothing samples on a timer, caches, or runs in the background —
+the ADC is touched if and only if a caller asks. A clock that wants a
+percentage every second gets one measurement per second; a screen that never
+asks costs nothing.
 
 ```cpp
-dev.Power().SetCacheRefresh(5000);  // 5 s, to watch a load step
-dev.Power().SetCacheRefresh(0);     // no cache; sample on every call
+m5ui::BatteryState b = dev.Power().GetBattery();   // one coherent measurement
+b.percent;  b.millivolts;  b.IsCharging();
+
+dev.Power().Percent();                             // or pull a single field
 ```
 
-or at boot via `DeviceConfig::battery_cache_refresh_ms`.
+Each call takes a burst of 8 conversions and their median, so noise rejection
+happens *inside* the call. That is what makes having no cache safe: a single
+raw conversion swings the reading by several percent, and the answer must not
+depend on how often you ask. One `GetBattery()` costs about a millisecond.
+
+If you need more than one field, call `GetBattery()` once rather than several
+single-field accessors — cheaper, and the fields are guaranteed to come from
+the same instant.
+
+`Begin()` enables the ADC and discards one conversion, because the first read
+after power-up is unreliable. It keeps no state.
 
 ## Two memory pools, never summed
 

@@ -1,9 +1,9 @@
 #pragma once
 // Battery and power state (issue #92, replaces the inline curve noted in #50).
 //
-// The voltage-to-percent mapping lives in one pure function so it can be unit
-// tested off-device (issue #17) instead of being buried in a status bar draw
-// call.
+// The voltage-to-percent mapping and the burst median live in pure functions
+// so they can be unit tested off-device (issue #17) instead of being buried in
+// a status bar draw call.
 
 #include <stdint.h>
 
@@ -19,8 +19,11 @@ enum class ChargeState : uint8_t {
     UsbOnly      // USB present, no cell detected
 };
 
+// An immutable snapshot. Every field comes from one measurement, so a caller
+// rendering "74%, 3810 mV, charging" cannot show three fields from three
+// different instants.
 struct BatteryState {
-    uint32_t millivolts = 0;   // raw, as sampled
+    uint32_t millivolts = 0;   // median of the burst
     uint8_t percent = 0;       // 0-100, from the discharge curve
     ChargeState charge = ChargeState::Unknown;
     bool usb_present = false;
@@ -33,45 +36,46 @@ struct BatteryState {
     }
 };
 
-// Owns ADC sampling and its cadence. Reads are cheap because they are served
-// from a smoothed cache; the ADC itself is only hit once per refresh period.
+// Pull-only. Nothing here samples on a timer, keeps a cache, or runs in the
+// background -- the ADC is touched if and only if a caller asks. A clock that
+// wants a percentage every second gets one measurement per second; a screen
+// that never asks costs nothing.
+//
+// Each call is self-contained: it takes a burst of kBurstSamples conversions
+// back to back and takes their median. That is what makes dropping the cache
+// safe -- a single raw conversion carries enough noise to swing the reading by
+// several percent, and previously a rolling window across calls hid it. Now
+// the rejection happens inside the call, so the answer does not depend on how
+// often you ask.
+//
+// Cost of one GetBattery(): 8 conversions, on the order of a millisecond.
+// Calling it per frame would be wasteful but not harmful; per second is free.
 class PowerManager {
    public:
-    // A minute. A cell's charge moves slowly enough that a status bar reading
-    // this often cannot tell the difference, and the ADC read is the one part
-    // of GetBattery() that actually costs something.
-    static constexpr uint32_t kDefaultCacheRefreshMs = 60000;
-    static constexpr uint8_t kSmoothingWindow = 8;
+    // Conversions per measurement. Odd counts would avoid the averaging step,
+    // but 8 keeps the burst short and the median stable.
+    static constexpr uint8_t kBurstSamples = 8;
 
-    // Enables the battery ADC and takes the first reading, so GetBattery() is
-    // answerable from the moment Device::Begin() returns rather than after the
-    // first refresh period elapses. Safe to call twice.
+    // Enables the battery ADC and throws away one conversion -- the first read
+    // after the ADC is powered up is unreliable, and discarding it here means
+    // no caller ever has to know that. Keeps no state beyond the enable.
     void Begin();
 
-    // How long a cached reading stays valid, in milliseconds. 0 disables the
-    // cache entirely, sampling on every GetBattery() call.
-    //
-    // Note the interaction with the smoothing window: the average spans
-    // kSmoothingWindow refresh periods, so at the 60 s default a reading
-    // reflects the last 8 minutes. That is the intent for a battery -- shorten
-    // this if you need the gauge to track a load step quickly.
-    void SetCacheRefresh(uint32_t milliseconds);
-    uint32_t CacheRefresh() const {
-        return _cache_refresh_ms;
-    }
-
-    // THE call most app code wants. Returns the cached state, resampling first
-    // if the cache is stale.
+    // THE call. One measurement, all fields coherent.
     BatteryState GetBattery();
 
-    // Forces an immediate ADC read, bypassing the cache. Use sparingly -- it
-    // blocks for the sample and defeats the smoothing window.
-    BatteryState SampleNow();
-
-    // Raw millivolts, already divider-corrected.
-    uint32_t ReadMillivolts();
-
+    // Single-field pulls, for a caller that wants exactly one number. Each is
+    // a full measurement -- if you need two or more fields, call GetBattery()
+    // once instead, both to halve the cost and to keep the fields consistent.
+    uint8_t Percent();
+    uint32_t Millivolts();
+    bool IsCharging();
+    bool IsLow();
     bool IsUsbPresent();
+
+    // One unfiltered conversion, no burst, no median. For calibration work
+    // (issue #79); app code wants GetBattery().
+    uint32_t ReadMillivoltsRaw();
 
     // Cuts main power. Does not return.
     [[noreturn]] void Shutdown();
@@ -83,14 +87,10 @@ class PowerManager {
     uint32_t SetCpuFrequencyMhz(uint32_t mhz);
 
    private:
-    void PushSample(uint32_t mv);
+    // Burst plus median. The only place the ADC is read in bulk.
+    uint32_t MeasureMillivolts();
 
     bool _begun = false;
-    uint32_t _cache_refresh_ms = kDefaultCacheRefreshMs;
-    uint32_t _samples[kSmoothingWindow] = {0};
-    uint8_t _sample_count = 0;
-    uint8_t _sample_head = 0;
-    BatteryState _cached;
 };
 
 }  // namespace m5ui

@@ -47,4 +47,24 @@ uint8_t BatteryPercentFromMillivolts(uint32_t mv) {
     return 100;
 }
 
+uint32_t MedianMillivolts(uint32_t* samples, uint8_t count) {
+    if (samples == nullptr || count == 0) return 0;
+
+    // Insertion sort: count is 8, where anything cleverer costs more in code
+    // size than it saves in cycles.
+    for (uint8_t i = 1; i < count; ++i) {
+        const uint32_t key = samples[i];
+        int16_t j = (int16_t)i - 1;
+        while (j >= 0 && samples[j] > key) {
+            samples[j + 1] = samples[j];
+            j--;
+        }
+        samples[j + 1] = key;
+    }
+
+    const uint8_t mid = (uint8_t)(count / 2);
+    if (count % 2 == 1) return samples[mid];
+    return (samples[mid - 1] + samples[mid] + 1) / 2;
+}
+
 }  // namespace m5ui
