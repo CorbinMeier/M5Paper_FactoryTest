@@ -168,6 +168,11 @@ void EPDGUI_PushFrame(Frame_Base* frame) {
 }
 
 void EPDGUI_PopFrame(bool isDelete) {
+    // Frame exit callbacks can over-pop (an extra back-navigation past the
+    // root frame); top()/pop() on an empty stack is UB, so make it a no-op.
+    if (frame_stack.empty()) {
+        return;
+    }
     if (isDelete) {
         wait_for_delete = frame_stack.top();
     }
