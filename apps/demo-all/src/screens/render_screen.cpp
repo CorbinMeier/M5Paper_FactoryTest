@@ -80,11 +80,13 @@ void RenderScreen::BuildContent(Column& column) {
     Row* actions = new Row(tok::kSpaceSm);
     stats->Add(actions);
 
-    Button* full = new Button("Full refresh", ButtonVariant::Outline);
+    m5ui::Button* full =
+        new m5ui::Button("Full refresh", ButtonVariant::Outline);
     full->OnPress([]() { Device::Get().Panel().RefreshFull(); });
     actions->Add(full);
 
-    Button* ghost = new Button("Clear ghosts", ButtonVariant::Outline);
+    m5ui::Button* ghost =
+        new m5ui::Button("Clear ghosts", ButtonVariant::Outline);
     ghost->OnPress([]() { Device::Get().Panel().RefreshGhostOnly(); });
     actions->Add(ghost);
 

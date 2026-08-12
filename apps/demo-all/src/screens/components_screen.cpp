@@ -84,19 +84,21 @@ void ComponentsScreen::BuildButtons(Column& column) {
     _tap_feedback = new Label("No button pressed yet.", tok::kTextSm);
     _tap_feedback->SetColor(tok::kFgMuted);
 
-    Button* filled = new Button("Filled", ButtonVariant::Filled);
+    m5ui::Button* filled = new m5ui::Button("Filled", ButtonVariant::Filled);
     filled->OnPress([this]() { _tap_feedback->SetText("Filled pressed."); });
     row->Add(filled);
 
-    Button* outline = new Button("Outline", ButtonVariant::Outline);
+    m5ui::Button* outline =
+        new m5ui::Button("Outline", ButtonVariant::Outline);
     outline->OnPress([this]() { _tap_feedback->SetText("Outline pressed."); });
     row->Add(outline);
 
-    Button* ghost = new Button("Ghost", ButtonVariant::Ghost);
+    m5ui::Button* ghost = new m5ui::Button("Ghost", ButtonVariant::Ghost);
     ghost->OnPress([this]() { _tap_feedback->SetText("Ghost pressed."); });
     row->Add(ghost);
 
-    Button* disabled = new Button("Disabled", ButtonVariant::Outline);
+    m5ui::Button* disabled =
+        new m5ui::Button("Disabled", ButtonVariant::Outline);
     disabled->SetEnabled(false);
     row->Add(disabled);
 
@@ -142,14 +144,14 @@ void ComponentsScreen::BuildIndicators(Column& column) {
     Row* controls = new Row(tok::kSpaceSm);
     card->Add(controls);
 
-    Button* less = new Button("-10%", ButtonVariant::Outline);
+    m5ui::Button* less = new m5ui::Button("-10%", ButtonVariant::Outline);
     less->OnPress([this]() {
         _progress_value -= 0.1f;
         _progress->SetValue(_progress_value);
     });
     controls->Add(less);
 
-    Button* more = new Button("+10%", ButtonVariant::Outline);
+    m5ui::Button* more = new m5ui::Button("+10%", ButtonVariant::Outline);
     more->OnPress([this]() {
         _progress_value += 0.1f;
         _progress->SetValue(_progress_value);
