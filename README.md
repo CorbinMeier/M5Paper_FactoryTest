@@ -125,8 +125,37 @@ sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
 The M5Paper's USB-serial bridge is covered by in-tree kernel modules, so no
-driver package is needed. Plug the device in and confirm a `/dev/ttyUSB0` or
-`/dev/ttyACM0` appears; `dmesg | tail` shows what enumerated.
+driver package is needed.
+
+#### Is the device actually there?
+
+The single most useful check. Run this, **then** plug the cable in and watch
+the lines appear live:
+
+```
+sudo dmesg -w
+```
+
+Three outcomes, and they point at three different problems:
+
+| What you see | What it means |
+|---|---|
+| Nothing at all | The cable is power-only, or the port/cable is dead. Charge-only USB-C cables have no data lines — the M5Paper will happily power on and charge while staying completely invisible to the host. This is the most common cause of "it isn't detected". |
+| `New USB device found` but no tty line | The host sees it; the driver did not bind. Check `lsusb`. |
+| A tty line, e.g. `ttyACM0: USB ACM device` | Ready to flash. |
+
+A healthy plug-in looks like this:
+
+```
+usb 3-2: New USB device found, idVendor=1a86, idProduct=55d4, bcdDevice= 4.44
+usb 3-2: Product: USB Single Serial
+cdc_acm 3-2:1.0: ttyACM0: USB ACM device
+```
+
+Note the port is **`/dev/ttyACM0`**, not `ttyUSB0`. The CH9102 bridge binds to
+`cdc_acm`. Much M5Stack documentation cites `ttyUSB*` (the older CH341 path),
+so checking only `ls /dev/ttyUSB*` will tell you the device is missing when it
+is present and working. `pio device list` sidesteps the distinction.
 
 ### 4. First build
 
