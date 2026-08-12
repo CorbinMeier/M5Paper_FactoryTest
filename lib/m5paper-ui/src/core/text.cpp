@@ -65,10 +65,29 @@ bool TextEngine::LoadFont(const char* path) {
     return true;
 }
 
+namespace {
+
+// The size tokens are pixel heights, but with no TTF loaded setTextSize() is an
+// integer scale multiplier over the built-in 8px glyph font -- so passing a
+// token straight through renders it 8x too large (issue #103).
+//
+// Floored, not rounded: a multiplier that overshoots would draw glyphs taller
+// than the box LineHeight() reserved for them, and on e-ink that overflow is
+// not repainted away cleanly. Undershooting only wastes a few pixels.
+constexpr uint8_t kBuiltinGlyphHeight = 8;
+
+uint8_t SizeToMultiplier(uint8_t size_px) {
+    const uint8_t mult = size_px / kBuiltinGlyphHeight;
+    return mult < 1 ? 1 : mult;
+}
+
+}  // namespace
+
 void TextEngine::Apply(M5EPD_Canvas& canvas, const TextStyle& style) {
-    if (_current_size != style.size) {
-        canvas.setTextSize(style.size);
+    if (_current_size != style.size || _current_canvas != &canvas) {
+        canvas.setTextSize(SizeToMultiplier(style.size));
         _current_size = style.size;
+        _current_canvas = &canvas;
     }
     canvas.setTextColor(style.color);
     canvas.setTextDatum(TL_DATUM);
@@ -93,7 +112,9 @@ int16_t TextEngine::MeasureWidth(const String& text, const TextStyle& style) {
     if (scratch == nullptr) {
         // No scratch canvas yet -- fall back to a monospace estimate so early
         // boot code still lays out approximately.
-        return (int16_t)(text.length() * (style.size * 6 / 10));
+        // The built-in glyph cell is 6px wide before scaling, so the estimate
+        // has to track the same multiplier the renderer will use (issue #103).
+        return (int16_t)(text.length() * SizeToMultiplier(style.size) * 6);
     }
 
     Apply(*scratch, style);

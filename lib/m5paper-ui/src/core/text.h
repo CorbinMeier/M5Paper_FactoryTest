@@ -85,7 +85,11 @@ class TextEngine {
     void Apply(M5EPD_Canvas& canvas, const TextStyle& style);
 
     bool _ready = false;
+    // setTextSize() is state on the canvas, not on this engine, so the cache
+    // must be keyed on both -- otherwise measuring on the scratch canvas
+    // suppresses the call on the real one (issue #104).
     uint8_t _current_size = 0;
+    const M5EPD_Canvas* _current_canvas = nullptr;
     // Measurement is the hot path in list and reader layout; a tiny cache of
     // (size, text hash) -> width keeps re-measure off the critical path.
     static constexpr uint8_t kCacheSlots = 16;
