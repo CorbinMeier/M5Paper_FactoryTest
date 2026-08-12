@@ -83,8 +83,6 @@ class VirtualList : public Widget {
     int16_t _row_h = tok::kListRowH;
     uint8_t _overscan = 1;
     int32_t _selected = -1;
-    uint32_t _cached_count = 0;
-    bool _count_valid = false;
 
     // Scroll offset in content pixels. The list scrolls itself rather than
     // living inside a ScrollView -- it must know which rows to ask for.

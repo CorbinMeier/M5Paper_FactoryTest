@@ -23,7 +23,8 @@ void VirtualList::SetOverscan(uint8_t rows) {
 }
 
 void VirtualList::Reload() {
-    _count_valid = false;
+    // The count and items are pulled from the data source on the next paint,
+    // so invalidating is the whole job.
     Invalidate();
 }
 
@@ -135,8 +136,6 @@ void VirtualList::DrawSelf(PaintContext& ctx) {
     ctx.canvas->fillRect(clip.x, clip.y, clip.w, clip.h, tok::kSurface);
 
     const uint32_t total = _count();
-    _cached_count = total;
-    _count_valid = true;
     if (total == 0) return;
 
     // The window: only these rows are asked for and drawn.
