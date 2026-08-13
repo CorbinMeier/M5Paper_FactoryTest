@@ -30,6 +30,11 @@ class App {
     // Screens deeper than this in the stack are torn down; 0 disables it.
     static constexpr uint8_t kColdDepth = 3;
 
+    // Reserved route for the framework system menu (issue #115). Every App
+    // gets a screen registered here from the constructor, so a 5-second hold
+    // of the Push side button works with no per-app wiring.
+    static constexpr const char* kSystemMenuRoute = "__system_menu__";
+
     explicit App(const char* name = "app");
     virtual ~App();
 
@@ -53,6 +58,11 @@ class App {
     bool Replace(const String& route);
     // Pops back to the home route.
     void PopToRoot();
+
+    // Opens the system menu overlay (issue #115), unless it is already the
+    // top screen. Called by Device on the Push-button hold gesture; apps may
+    // also call it directly, e.g. from a settings button.
+    bool OpenSystemMenu();
 
     Screen* Top() const;
     uint8_t Depth() const {

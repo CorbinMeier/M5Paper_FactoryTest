@@ -1,8 +1,16 @@
 #include "app.h"
 
+#include <string.h>
+
+#include "system_menu.h"
+
 namespace m5ui {
 
-App::App(const char* name) : _name(name) {}
+App::App(const char* name) : _name(name) {
+    // Registered directly, bypassing Register(), so it never becomes _home
+    // (Register() defaults _home to the first route it sees).
+    _routes[kSystemMenuRoute] = []() -> Screen* { return new SystemMenuScreen(); };
+}
 
 App::~App() {
     for (Screen* s : _stack) delete s;
@@ -98,6 +106,13 @@ void App::PopToRoot() {
         now->OnResume();
         now->InvalidateAll();
     }
+}
+
+bool App::OpenSystemMenu() {
+    if (Screen* top = Top()) {
+        if (strcmp(top->Name(), kSystemMenuRoute) == 0) return false;
+    }
+    return Push(kSystemMenuRoute);
 }
 
 void App::EvictColdScreens() {

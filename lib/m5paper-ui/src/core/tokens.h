@@ -74,6 +74,10 @@ constexpr uint32_t kTapMaxMs = 400;        // press+release inside this = tap
 constexpr uint32_t kLongPressMs = 600;
 constexpr uint32_t kDragSlopPx = 8;        // movement before a tap becomes a drag
 constexpr uint32_t kStatusPollMs = 10000;  // status bar refresh cadence
+// Holding the Push side button (G38) this long opens the system menu
+// (issue #115). Long relative to kLongPressMs -- this is a deliberate,
+// device-wide gesture, not a per-widget interaction.
+constexpr uint32_t kSystemMenuHoldMs = 5000;
 
 }  // namespace tok
 }  // namespace m5ui

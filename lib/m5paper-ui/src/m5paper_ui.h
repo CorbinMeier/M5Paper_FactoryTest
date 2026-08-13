@@ -31,6 +31,7 @@
 #include "core/power.h"
 #include "core/screen.h"
 #include "core/specs.h"
+#include "core/system_menu.h"
 #include "core/text.h"
 #include "core/tokens.h"
 #include "core/widget.h"
