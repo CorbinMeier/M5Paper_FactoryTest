@@ -43,7 +43,12 @@ CalendarScreen::CalendarScreen() : Screen("calendar") {}
 void CalendarScreen::Build() {
     Column* root = new Column(tok::kSpaceMd);
     root->SetPadding(EdgeInsets::All(tok::kSpaceLg));
-    _root = root;
+    // Add to the framework-owned ScreenRoot, don't replace it -- Root() is
+    // already a ScreenRoot that Screen::Paint() depends on for dirty-rect
+    // tracking; overwriting _root here left a Column in its place, which
+    // Paint()'s static_cast<ScreenRoot*> then read as garbage, so nothing
+    // ever painted (issue #111).
+    Root()->Add(root);
 
     Clock& clock = Dev().Time();
 
