@@ -38,6 +38,7 @@
 // -------------------------------------------------------- components -------
 #include "components/button.h"
 #include "components/container.h"
+#include "components/image.h"
 #include "components/label.h"
 #include "components/listview.h"
 #include "components/progressbar.h"
