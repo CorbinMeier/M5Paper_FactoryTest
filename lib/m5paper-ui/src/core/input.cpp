@@ -202,22 +202,47 @@ void SideButtonSource::Poll(InputQueue& queue) {
         e.keycode = _map[i];
         e.t = now;
 
+        const bool is_push = (i == (uint8_t)SideButton::Push);
+
         if (down[i] && !_was_down[i]) {
             _down_t[i] = now;
             _last_repeat[i] = now;
-            e.kind = InputKind::Key;
-            queue.Push(e);
-        } else if (down[i] && _was_down[i]) {
-            const bool past_delay = (now - _down_t[i]) >= kKeyRepeatDelayMs;
-            const bool due = (now - _last_repeat[i]) >= kKeyRepeatRateMs;
-            if (past_delay && due) {
-                _last_repeat[i] = now;
-                e.kind = InputKind::KeyRepeat;
+            _system_menu_sent[i] = false;
+            // Push withholds its Key until release (or the hold threshold),
+            // so a would-be system-menu hold does not also fire Enter.
+            if (!is_push) {
+                e.kind = InputKind::Key;
                 queue.Push(e);
             }
+        } else if (down[i] && _was_down[i]) {
+            if (is_push) {
+                if (!_system_menu_sent[i] &&
+                    (now - _down_t[i]) >= tok::kSystemMenuHoldMs) {
+                    _system_menu_sent[i] = true;
+                    e.kind = InputKind::SystemMenu;
+                    queue.Push(e);
+                }
+            } else {
+                const bool past_delay = (now - _down_t[i]) >= kKeyRepeatDelayMs;
+                const bool due = (now - _last_repeat[i]) >= kKeyRepeatRateMs;
+                if (past_delay && due) {
+                    _last_repeat[i] = now;
+                    e.kind = InputKind::KeyRepeat;
+                    queue.Push(e);
+                }
+            }
         } else if (!down[i] && _was_down[i]) {
-            e.kind = InputKind::KeyUp;
-            queue.Push(e);
+            if (is_push) {
+                // Released before the hold threshold: deliver the single Key
+                // that was withheld on press, so a tap still acts as Enter.
+                if (!_system_menu_sent[i]) {
+                    e.kind = InputKind::Key;
+                    queue.Push(e);
+                }
+            } else {
+                e.kind = InputKind::KeyUp;
+                queue.Push(e);
+            }
         }
         _was_down[i] = down[i];
     }

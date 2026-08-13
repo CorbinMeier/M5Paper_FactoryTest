@@ -221,6 +221,14 @@ void Device::PumpInput() {
     while (_queue.Pop(e)) {
         NoteActivity();
 
+        // Global gesture, intercepted before the current screen or focused
+        // widget ever sees it -- the system menu must open regardless of
+        // what has focus (issue #115).
+        if (e.kind == InputKind::SystemMenu) {
+            if (_app != nullptr) _app->OpenSystemMenu();
+            continue;
+        }
+
         // The on-screen keyboard gets first refusal on pointer events inside
         // its own frame; otherwise a tap would fall through to the content
         // behind it.

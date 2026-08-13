@@ -35,7 +35,9 @@ enum class InputKind : uint8_t {
     Key,       // keycode + modifiers, on press
     KeyRepeat,
     KeyUp,
-    Scroll     // dz = wheel detents or accumulated drag delta
+    Scroll,    // dz = wheel detents or accumulated drag delta
+    SystemMenu // Push button held past kSystemMenuHoldMs (issue #115) --
+               // global, so it is neither IsPointer() nor IsKey()
 };
 
 // Physical side buttons, delivered as Key events so one dispatch path serves
@@ -176,6 +178,12 @@ class TouchSource : public InputSourceBase {
 
 // The three side buttons, delivered as Key events with synthetic keycodes so
 // they route through the focus manager like any other key.
+//
+// Push (G38) is special-cased: it does not repeat like Left/Right. A short
+// press still delivers a single Key on release (so it keeps acting as Enter),
+// but a hold past kSystemMenuHoldMs fires one SystemMenu event instead and
+// suppresses the Key entirely -- otherwise the seconds spent reaching that
+// threshold would spam Enter into whatever currently has focus.
 class SideButtonSource : public InputSourceBase {
    public:
     void Poll(InputQueue& queue) override;
@@ -192,6 +200,7 @@ class SideButtonSource : public InputSourceBase {
     bool _was_down[3] = {false, false, false};
     uint32_t _down_t[3] = {0, 0, 0};
     uint32_t _last_repeat[3] = {0, 0, 0};
+    bool _system_menu_sent[3] = {false, false, false}; // Push only
 };
 
 }  // namespace m5ui
