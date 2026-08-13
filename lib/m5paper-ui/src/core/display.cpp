@@ -30,6 +30,16 @@ void Display::Begin() {
     M5.EPD.SetRotation(M5EPD_Driver::ROTATE_90);
     M5.EPD.Clear(true);
 
+    // M5EPD_Driver inverts every pushed pixel by default (its !_is_reverse
+    // path does word = 0xFFFF - word), which silently flips every grey
+    // constant in this library -- 0 (kFg, meant black) rendered white and 15
+    // (kSurface, meant white) rendered black (issue #111). Clear(true) above
+    // runs before this, under the default (uninverted) path, so it still
+    // blanks the panel white as intended; everything pushed afterward -- all
+    // real UI painting -- goes through the un-inverted path and renders with
+    // the polarity every token in this codebase assumes.
+    M5.EPD.SetColorReverse(true);
+
     // 259 KB -- necessarily PSRAM. createCanvas falls back to PSRAM when the
     // internal heap cannot serve it, which is why the firmware boots at all.
     _canvas.createCanvas(kDisplayW, kDisplayH);
