@@ -32,6 +32,16 @@
 // (BLE's default is 23 bytes, 20 of it usable) -- the eventual Android app
 // should call requestMtu() before writing weather with more than ~4 hours.
 // NimBLE negotiates on this side automatically; nothing here changes for it.
+//
+// Pairing (issue #114): Begin() always configures bonding + MITM + LE Secure
+// Connections with numeric-comparison IO capability, and the time/weather
+// characteristics require an encrypted link to write -- an unbonded client
+// cannot push data without the user confirming a 6-digit code on both
+// devices first (the same code Android's own pairing dialog shows). This is
+// a capability the app drives, not a fixed trigger: any app code holding a
+// BleCompanion can call TakePendingPasskey()/ConfirmPasskey() from a button
+// handler, a menu, a boot-time gesture, whatever fits. Once bonded, NimBLE's
+// own bonding store (NVS) means later reconnects skip the prompt.
 
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
@@ -100,7 +110,22 @@ class BleCompanion {
     }
     WeatherSnapshot LastWeather() const;
 
-    // Called by the GATT callbacks (NimBLE task). Not for app code.
+    // ------------------------------------------------------------ pairing --
+    // True and clears the pending flag exactly once per pairing attempt --
+    // call every loop tick while a pairing attempt might be in flight (e.g.
+    // while showing a "waiting to pair" screen). `pin` is the 6-digit code
+    // to display; the peer shows the same code and the user confirms both
+    // sides match. The app must eventually call ConfirmPasskey() for this
+    // attempt (accept or reject) or the peer's side times out on its own.
+    bool TakePendingPasskey(uint32_t& pin);
+    // Accepts or rejects the pairing attempt from the last
+    // TakePendingPasskey(). No-op if nothing is pending.
+    void ConfirmPasskey(bool accept);
+    // True and clears the pending flag once when a pairing attempt finishes
+    // (success or failure) -- for a screen to show "Paired!" / "Failed".
+    bool TakeAuthResult(bool& success);
+
+    // Called by the GATT/security callbacks (NimBLE task). Not for app code.
     void HandleTimeWrite(const uint8_t* data, size_t len);
     void HandleWeatherWrite(const uint8_t* data, size_t len);
     // Serializes Weather() + LastSyncedEpoch() into the status characteristic
@@ -116,6 +141,13 @@ class BleCompanion {
 
     WeatherSnapshot _weather;
     bool _weather_pending = false;
+
+    uint32_t _pending_pin = 0;
+    bool _pin_pending = false;
+    void* _pending_conn_info = nullptr; // NimBLEConnInfo*, heap-owned, opaque
+
+    bool _auth_pending = false;
+    bool _auth_success = false;
 
     void* _server = nullptr; // NimBLEServer*, opaque so NimBLE stays out of the header
     void* _status_char = nullptr; // NimBLECharacteristic*, same reason

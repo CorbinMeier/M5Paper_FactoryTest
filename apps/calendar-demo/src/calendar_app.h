@@ -1,5 +1,5 @@
 #pragma once
-// One-screen app: registers "calendar" as the (only, home) route.
+// Registers "calendar" (the default home) and "pairing" (issue #114).
 
 #include <m5paper_ui.h>
 
@@ -20,8 +20,24 @@ class CalendarApp : public m5ui::App {
         _weather = weather;
     }
 
+    // Owned by the app (not Device -- BLE is opt-in per-app, issue #112),
+    // long-lived so any screen or main.cpp code can drive pairing, not just
+    // whatever triggered it first (issue #114).
+    m5ui::BleCompanion& Ble() {
+        return _ble;
+    }
+
+    // Must be called before Device::SetApp()/Start() -- OnStart() reads this
+    // once to decide the home route. main.cpp sets it when the Push button
+    // is held through boot.
+    void RequestPairingOnStart() {
+        _pairing_requested = true;
+    }
+
    private:
     m5ui::WeatherSnapshot _weather;
+    m5ui::BleCompanion _ble;
+    bool _pairing_requested = false;
 };
 
 }  // namespace calendar

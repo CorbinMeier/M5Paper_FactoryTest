@@ -100,6 +100,31 @@ class BleCompanionServerCallbacks : public NimBLEServerCallbacks {
         server->getAdvertising()->start();
     }
 
+    // Numeric comparison: NimBLE hands back the 6-digit code it is showing
+    // the peer (Android shows its own copy in the system pairing dialog at
+    // the same time). Stash it and a copy of connInfo -- the app confirms
+    // asynchronously, on its own loop tick, once it has drawn the code and
+    // the user has tapped a button, so this cannot resolve synchronously.
+    void onConfirmPassKey(NimBLEConnInfo& connInfo, uint32_t pin) override {
+        portENTER_CRITICAL(&_owner->_mux);
+        delete static_cast<NimBLEConnInfo*>(_owner->_pending_conn_info);
+        _owner->_pending_conn_info = new NimBLEConnInfo(connInfo);
+        _owner->_pending_pin = pin;
+        _owner->_pin_pending = true;
+        portEXIT_CRITICAL(&_owner->_mux);
+    }
+
+    void onAuthenticationComplete(NimBLEConnInfo& connInfo) override {
+        portENTER_CRITICAL(&_owner->_mux);
+        // Authenticated, not just encrypted -- MITM is on (setSecurityAuth
+        // below), so an encrypted-but-not-authenticated link would mean the
+        // numeric comparison was bypassed somehow, which should not count as
+        // a successful pairing here.
+        _owner->_auth_success = connInfo.isAuthenticated();
+        _owner->_auth_pending = true;
+        portEXIT_CRITICAL(&_owner->_mux);
+    }
+
    private:
     BleCompanion* _owner;
 };
@@ -108,6 +133,14 @@ class BleCompanionServerCallbacks : public NimBLEServerCallbacks {
 
 void BleCompanion::Begin(const char* device_name) {
     NimBLEDevice::init(device_name);
+
+    // Bonding + MITM + LE Secure Connections, numeric-comparison IO
+    // capability (issue #114) -- the same 6-digit code on both devices,
+    // rather than a fixed passkey or "Just Works" (which would let any
+    // nearby BLE device write time/weather with no user confirmation at
+    // all).
+    NimBLEDevice::setSecurityAuth(/*bonding=*/true, /*mitm=*/true, /*sc=*/true);
+    NimBLEDevice::setSecurityIOCap(BLE_HS_IO_DISPLAY_YESNO);
 
     NimBLEServer* server = NimBLEDevice::createServer();
     // Static, not heap-tracked by BleCompanion: NimBLE keeps its own
@@ -121,12 +154,17 @@ void BleCompanion::Begin(const char* device_name) {
 
     NimBLEService* service = server->createService(kServiceUuid);
 
+    // WRITE_ENC, not plain WRITE: a write is rejected at the link layer
+    // until the connection is encrypted, which only happens after a
+    // successful pairing -- this is the actual enforcement point for
+    // "unbonded clients cannot push data" (issue #114), not just the
+    // presence of security settings above.
     NimBLECharacteristic* time_char = service->createCharacteristic(
-        kTimeCharUuid, NIMBLE_PROPERTY::WRITE);
+        kTimeCharUuid, NIMBLE_PROPERTY::WRITE_ENC);
     time_char->setCallbacks(&char_callbacks);
 
     NimBLECharacteristic* weather_char = service->createCharacteristic(
-        kWeatherCharUuid, NIMBLE_PROPERTY::WRITE);
+        kWeatherCharUuid, NIMBLE_PROPERTY::WRITE_ENC);
     weather_char->setCallbacks(&char_callbacks);
 
     NimBLECharacteristic* status_char =
@@ -188,6 +226,39 @@ WeatherSnapshot BleCompanion::LastWeather() const {
     const WeatherSnapshot snapshot = _weather;
     portEXIT_CRITICAL(&_mux);
     return snapshot;
+}
+
+bool BleCompanion::TakePendingPasskey(uint32_t& pin) {
+    portENTER_CRITICAL(&_mux);
+    const bool had = _pin_pending;
+    if (had) {
+        pin = _pending_pin;
+        _pin_pending = false;
+    }
+    portEXIT_CRITICAL(&_mux);
+    return had;
+}
+
+void BleCompanion::ConfirmPasskey(bool accept) {
+    portENTER_CRITICAL(&_mux);
+    NimBLEConnInfo* conn_info = static_cast<NimBLEConnInfo*>(_pending_conn_info);
+    _pending_conn_info = nullptr;
+    portEXIT_CRITICAL(&_mux);
+
+    if (conn_info == nullptr) return; // nothing pending -- no-op
+    NimBLEDevice::injectConfirmPasskey(*conn_info, accept);
+    delete conn_info;
+}
+
+bool BleCompanion::TakeAuthResult(bool& success) {
+    portENTER_CRITICAL(&_mux);
+    const bool had = _auth_pending;
+    if (had) {
+        success = _auth_success;
+        _auth_pending = false;
+    }
+    portEXIT_CRITICAL(&_mux);
+    return had;
 }
 
 void BleCompanion::HandleTimeWrite(const uint8_t* data, size_t len) {
