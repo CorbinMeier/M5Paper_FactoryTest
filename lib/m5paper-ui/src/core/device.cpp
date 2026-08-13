@@ -98,6 +98,30 @@ bool Clock::SyncFromNtp(const char* server, uint32_t timeout_ms) {
     return false;
 }
 
+void Clock::SetEpochSeconds(uint32_t epoch_utc, int16_t tz_offset_minutes) {
+    _tz_minutes = tz_offset_minutes;
+
+    // The RTC stores wall-clock (local) time -- TimeString()/DateString()
+    // read it with no offset math, same assumption SyncFromNtp() makes via
+    // getLocalTime(). Shift the UTC epoch by the offset before breaking it
+    // into fields, rather than storing UTC and adjusting on every read.
+    const time_t local_epoch =
+        (time_t)epoch_utc + (time_t)tz_offset_minutes * 60;
+    struct tm info;
+    gmtime_r(&local_epoch, &info);
+
+    rtc_time_t t = {(int8_t)info.tm_hour, (int8_t)info.tm_min,
+                    (int8_t)info.tm_sec};
+    rtc_date_t d = {(int8_t)info.tm_wday, (int8_t)(info.tm_mon + 1),
+                    (int8_t)info.tm_mday, (int16_t)(info.tm_year + 1900)};
+    {
+        I2CLock lock;
+        M5.RTC.setTime(&t);
+        M5.RTC.setDate(&d);
+    }
+    _synced = true;
+}
+
 // --------------------------------------------------------------- Device ----
 
 Device& Device::Get() {

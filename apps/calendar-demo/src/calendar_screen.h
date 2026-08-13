@@ -6,17 +6,22 @@
 
 #include <m5paper_ui.h>
 
+// Not in the umbrella header on purpose (see ble_companion.h).
+#include "modules/ble_companion.h"
+
 namespace calendar {
 
 class CalendarScreen : public m5ui::Screen {
    public:
-    CalendarScreen();
+    explicit CalendarScreen(const m5ui::WeatherSnapshot& weather);
 
     void Build() override;
 
    private:
     void BuildMonthGrid(m5ui::Column& column, int16_t year, uint8_t month,
                         uint8_t today_day);
+
+    m5ui::WeatherSnapshot _weather;
 };
 
 }  // namespace calendar

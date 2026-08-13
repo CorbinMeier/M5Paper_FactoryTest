@@ -78,6 +78,11 @@ class Clock {
     // Requires WiFi to already be up; the framework does not start it for you.
     bool SyncFromNtp(const char* server = "pool.ntp.org", uint32_t timeout_ms = 10000);
 
+    // Sets the RTC directly from a UTC epoch + tz offset -- the BLE
+    // companion's time write (issue #112) uses this instead of NTP, since
+    // there is no WiFi involved.
+    void SetEpochSeconds(uint32_t epoch_utc, int16_t tz_offset_minutes);
+
    private:
     int16_t _tz_minutes = 0;
     bool _synced = false;

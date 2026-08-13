@@ -7,7 +7,7 @@ namespace calendar {
 CalendarApp::CalendarApp() : App("calendar-demo") {}
 
 void CalendarApp::OnStart() {
-    Register("calendar", []() { return new CalendarScreen(); });
+    Register("calendar", [this]() { return new CalendarScreen(_weather); });
     SetHome("calendar");
 }
 

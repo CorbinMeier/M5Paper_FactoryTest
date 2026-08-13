@@ -36,9 +36,33 @@ Container* MakeDayCell(const String& text, bool is_today) {
     return cell;
 }
 
+const char* ConditionLabel(uint8_t condition) {
+    switch (static_cast<WeatherCondition>(condition)) {
+        case WeatherCondition::Clear: return "Clear";
+        case WeatherCondition::PartlyCloudy: return "Partly cloudy";
+        case WeatherCondition::Cloudy: return "Cloudy";
+        case WeatherCondition::Rain: return "Rain";
+        case WeatherCondition::Snow: return "Snow";
+        case WeatherCondition::Thunderstorm: return "Thunderstorm";
+        case WeatherCondition::Fog: return "Fog";
+        case WeatherCondition::Unknown: default: return "Unknown";
+    }
+}
+
+// The wire format is Celsius x10 (issue #112); shown as received rather than
+// converted, so a mismatch between this label and what the phone sent is
+// easy to spot instead of hidden behind unit math.
+String FormatTempC(int16_t temp_c_x10) {
+    char buf[8];
+    snprintf(buf, sizeof(buf), "%d.%dC", temp_c_x10 / 10,
+             abs(temp_c_x10 % 10));
+    return String(buf);
+}
+
 }  // namespace
 
-CalendarScreen::CalendarScreen() : Screen("calendar") {}
+CalendarScreen::CalendarScreen(const WeatherSnapshot& weather)
+    : Screen("calendar"), _weather(weather) {}
 
 void CalendarScreen::Build() {
     Column* root = new Column(tok::kSpaceMd);
@@ -67,6 +91,16 @@ void CalendarScreen::Build() {
     clock_label->SetBold(true);
     clock_label->SetAlign(TextAlign::Center);
     root->Add(clock_label);
+
+    if (_weather.HasData()) {
+        Label* weather_label = new Label(
+            FormatTempC(_weather.current_temp_c_x10) + "  " +
+                ConditionLabel(_weather.current_condition),
+            tok::kTextMd);
+        weather_label->SetColor(tok::kFg);
+        weather_label->SetAlign(TextAlign::Center);
+        root->Add(weather_label);
+    }
 
     root->Add(new Divider());
 
